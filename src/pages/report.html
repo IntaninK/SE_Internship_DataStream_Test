@@ -64,16 +64,34 @@
   </style>
 </head>
 <body>
-
-   <!-- Header Bar -->
   <div id="header-placeholder"></div>
-
-  <!-- ========== Main Content ========== -->
   <main class="main-content" style="max-width:1400px; margin: 0 auto;">
+    <h1 style="font-family:Prompt,sans-serif; font-size:22px; font-weight:600; margin:16px 0;">
+      รายงานการใช้งานเว็บไซต์ (Google Analytics)
+    </h1>
 
-  </main><!-- /main-content -->
+    <div class="filter-bar">
+      <label for="reportType">รายงาน</label>
+      <select id="reportType" class="filter-select">
+        <option value="pageviews">Page views รายหน้า (รายวัน)</option>
+        <option value="daily">ผู้ใช้/เซสชัน รายวัน</option>
+        <option value="events">จำนวน Event</option>
+      </select>
 
+      <label for="startDate">ตั้งแต่</label>
+      <input type="date" id="startDate" class="filter-select" />
+      <label for="endDate">ถึง</label>
+      <input type="date" id="endDate" class="filter-select"/>
+
+      <button id="downloadBtn" class="filter-select" style=" background: linear-gradient(180deg, #1541D2, #0B2268); color: #fff; box-shadow: 0 4px 16px rgba(21, 65, 210, 0.3);">
+        ดาวน์โหลด CSV
+      </button>
+    </div>
+
+    <p id="reportMsg" style="font-size:13px; color:#6B7280;"></p>
+  </main>
 
   <script src="../components/header_prof.js"></script>
+  <script src="../api/report.js"></script>
 </body>
 </html>

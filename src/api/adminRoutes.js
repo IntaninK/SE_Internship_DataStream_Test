@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const prisma = require("../db");
 const requireAdmin = require("../auth/requireAdmin");
+const { getGaClient } = require("../utils/ga");
 const { parseStudentSpreadsheet, calculateCurrentAcademicYear } = require("../utils/studentImportParser");
 
 const upload = multer({
@@ -1200,6 +1201,54 @@ router.post("/students/import-confirm", async (req, res) => {
   } catch (err) {
     console.error("POST /api/admin/students/import-confirm error:", err);
     res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการบันทึกข้อมูลเข้าสู่ระบบ" });
+  }
+});
+
+// ---------- Google Analytics export ----------
+function gaReportToCsv(report) {
+  const headers = [
+    ...report.dimensionHeaders.map((h) => h.name),
+    ...report.metricHeaders.map((h) => h.name),
+  ];
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = (report.rows || []).map((r) =>
+    [
+      ...r.dimensionValues.map((d) => d.value),
+      ...r.metricValues.map((m) => m.value),
+    ]
+      .map(esc)
+      .join(",")
+  );
+  return [headers.join(","), ...lines].join("\n");
+}
+
+const GA_REPORTS = {
+  pageviews: { dimensions: ["date", "pagePath"], metrics: ["screenPageViews", "activeUsers"] },
+  daily: { dimensions: ["date"], metrics: ["activeUsers", "sessions", "screenPageViews"] },
+  events: { dimensions: ["eventName"], metrics: ["eventCount"] },
+};
+
+router.get("/analytics/export.csv", async (req, res) => {
+  const type = GA_REPORTS[req.query.type] ? req.query.type : null;
+  const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+  if (!type || !isDate(req.query.start) || !isDate(req.query.end)) {
+    return res.status(400).json({ error: "Invalid type or date range" });
+  }
+  try {
+    const cfg = GA_REPORTS[type];
+    const [report] = await getGaClient().runReport({
+      property: `properties/${process.env.GA_PROPERTY_ID}`,
+      dateRanges: [{ startDate: req.query.start, endDate: req.query.end }],
+      dimensions: cfg.dimensions.map((name) => ({ name })),
+      metrics: cfg.metrics.map((name) => ({ name })),
+      limit: 10000,
+    });
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="ga-${type}-${req.query.start}_${req.query.end}.csv"`);
+    res.send("\uFEFF" + gaReportToCsv(report));
+  } catch (e) {
+    console.error("GA export failed:", e);
+    res.status(500).json({ error: "Failed to export analytics" });
   }
 });
 

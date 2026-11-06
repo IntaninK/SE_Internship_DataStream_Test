@@ -34,6 +34,12 @@ fetch('../components/header_prof.html')
                     }
                 }
 
+                // แสดงเมนู report เฉพาะ role ที่เข้า /api/admin ได้
+                const navReport = headerNav ? headerNav.querySelector('#nav-report') : null;
+                if (navReport && (role === 'ADMIN' || role === 'STAFF')) {
+                    navReport.style.display = '';
+                }
+
                 // Highlight active nav link
                 const currentPath = window.location.pathname;
                 if (headerNav) {
