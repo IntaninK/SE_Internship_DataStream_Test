@@ -12,3 +12,5 @@ server_test.js
 .windsurf/
 .vscode/
 docs/
+moveCloudinary_imagine.js
+test_GA4.js
