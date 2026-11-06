@@ -12,5 +12,10 @@ server_test.js
 .windsurf/
 .vscode/
 docs/
+k6-test/
+script/
 moveCloudinary_imagine.js
 test_GA4.js
+script/ga_traffic.js
+k6-test/k6-test1.js
+k6-test/k6-test1.js
