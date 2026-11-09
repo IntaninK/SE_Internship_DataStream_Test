@@ -4,6 +4,7 @@
   const endEl = document.getElementById("endDate");
   const btn = document.getElementById("downloadBtn");
   const msg = document.getElementById("reportMsg");
+  const format = document.getElementById("formatType").value;
 
   const fmt = (d) => d.toISOString().slice(0, 10);
 
@@ -26,14 +27,14 @@
 
     try {
       const res = await fetch(
-        `/api/admin/analytics/export.csv?type=${encodeURIComponent(type)}&start=${start}&end=${end}`
+        `/api/admin/analytics/export.csv?type=${encodeURIComponent(type)}&start=${start}&end=${end}&format=${format}`
       );
       if (!res.ok) throw new Error(res.status);
 
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `ga-${type}-${start}_${end}.csv`;
+      a.download = `ga-${type}-${start}_${end}.${format}`;
       a.click();
       URL.revokeObjectURL(a.href);
 

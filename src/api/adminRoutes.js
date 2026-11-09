@@ -4,6 +4,17 @@ const prisma = require("../db");
 const requireAdmin = require("../auth/requireAdmin");
 const { getGaClient } = require("../utils/ga");
 const { parseStudentSpreadsheet, calculateCurrentAcademicYear } = require("../utils/studentImportParser");
+const ExcelJS = require("exceljs");
+
+const GA_LABELS = {
+  date: "วันที่",
+  pagePath: "หน้าเว็บ",
+  eventName: "Event",
+  activeUsers: "ผู้ใช้",
+  sessions: "เซสชัน",
+  screenPageViews: "จำนวนการดูหน้า",
+  eventCount: "จำนวน Event",
+};
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -1222,6 +1233,112 @@ function gaReportToCsv(report) {
   return [headers.join(","), ...lines].join("\n");
 }
 
+async function gaReportToXlsx(report, exportedBy) {
+  const TOP_ROWS = 3;              // number of rows to black out at the top
+  const HEADER_ROW = TOP_ROWS + 1; // table header starts right below
+
+  const dimNames = report.dimensionHeaders.map((h) => h.name);
+  const metNames = report.metricHeaders.map((h) => h.name);
+  const headers = [...dimNames, ...metNames];
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Report");
+
+  // 1) empty rows first, so the table starts lower
+  for (let i = 0; i < TOP_ROWS; i++) ws.addRow([]);
+    // ---- top area ----
+  const exportedAt = new Date().toLocaleString("th-TH-u-ca-gregory", {
+    timeZone: "Asia/Bangkok",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  const whiteFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFFFF" } };
+
+  // 1) white background on every top cell, then merge each row across the table width
+  for (let r = 1; r <= TOP_ROWS; r++) {
+    for (let c = 1; c <= headers.length; c++) {
+      ws.getCell(r, c).fill = whiteFill;
+    }
+    ws.mergeCells(r, 1, r, headers.length);
+  }
+
+  // 2) style the master cell (column 1) of each merged row, after merging
+  const topRows = [
+    { text: "รายงานการใช้งานเว็บไซต์ของระบบฝึกงานนิสิต (GA4)", font: { bold: true, size: 14 }, height: 28 },
+    { text: `ส่งออกโดย: ${exportedBy}, วันที่ส่งออก: ${exportedAt}`, font: { size: 12 }, height: 20 },
+  ];
+
+  topRows.forEach((row, i) => {
+    const cell = ws.getCell(i + 1, 1);
+    cell.value = row.text;
+    cell.font = { color: { argb: "FF000000" }, ...row.font };
+    cell.fill = whiteFill;
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+    ws.getRow(i + 1).height = row.height;
+  });
+
+  wb.creator = exportedBy;
+  wb.lastModifiedBy = exportedBy;
+  wb.created = new Date();
+
+  // 3) header row of the table (now row 4)
+  ws.addRow(headers.map((h) => GA_LABELS[h] || h));
+
+  // 4) data rows
+  (report.rows || []).forEach((r) => {
+    const dims = r.dimensionValues.map((d, i) =>
+      dimNames[i] === "date"
+        ? `${d.value.slice(0, 4)}-${d.value.slice(4, 6)}-${d.value.slice(6, 8)}`
+        : d.value
+    );
+    const mets = r.metricValues.map((m) => Number(m.value));
+    ws.addRow([...dims, ...mets]);
+  });
+
+  // header style
+  const head = ws.getRow(HEADER_ROW);
+  head.height = 24;
+  head.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1541D2" } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+
+  // body style (rows below the header only)
+  ws.eachRow((row, n) => {
+    if (n <= HEADER_ROW) return;
+    row.eachCell((cell) => {
+      cell.border = { bottom: { style: "thin", color: { argb: "FFE5E7EB" } } };
+      if (n % 2 === 0) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+      }
+    });
+  });
+
+    // widths
+  headers.forEach((h, i) => {
+    ws.getColumn(i + 1).width = h === "pagePath" ? 45 : 18;
+  });
+
+  // right-align number columns in data rows only (below the header)
+  ws.eachRow((row, n) => {
+    if (n <= HEADER_ROW) return;
+    for (let c = dimNames.length + 1; c <= headers.length; c++) {
+      row.getCell(c).alignment = { horizontal: "right" };
+    }
+  });
+
+  // freeze everything above the first data row, filter on the header row
+  ws.views = [{ state: "frozen", ySplit: HEADER_ROW }];
+  ws.autoFilter = {
+    from: { row: HEADER_ROW, column: 1 },
+    to: { row: HEADER_ROW, column: headers.length },
+  };
+
+  return wb.xlsx.writeBuffer();
+}
+
 const GA_REPORTS = {
   pageviews: { dimensions: ["date", "pagePath"], metrics: ["screenPageViews", "activeUsers"] },
   daily: { dimensions: ["date"], metrics: ["activeUsers", "sessions", "screenPageViews"] },
@@ -1243,6 +1360,25 @@ router.get("/analytics/export.csv", async (req, res) => {
       metrics: cfg.metrics.map((name) => ({ name })),
       limit: 10000,
     });
+    if (req.query.format === "xlsx") {
+      const u = req.session.user || {};
+      const exportedBy =
+        [u.username || u.name || u.email, u.role ? `(${u.role})` : ""]
+          .filter(Boolean)
+          .join(" ") || `user #${u.id}`;
+
+      const buf = await gaReportToXlsx(report, exportedBy);
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="ga-${type}-${req.query.start}_${req.query.end}.xlsx"`
+      );
+      return res.send(Buffer.from(buf));
+    }
+
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="ga-${type}-${req.query.start}_${req.query.end}.csv"`);
     res.send("\uFEFF" + gaReportToCsv(report));
