@@ -1267,7 +1267,10 @@ async function gaReportToXlsx(report, exportedBy) {
   const topRows = [
     { text: "รายงานการใช้งานเว็บไซต์ของระบบฝึกงานนิสิต (GA4)", font: { bold: true, size: 14 }, height: 28 },
     { text: `ส่งออกโดย: ${exportedBy}, วันที่ส่งออก: ${exportedAt}`, font: { size: 12 }, height: 20 },
+    
   ];
+
+  
 
   topRows.forEach((row, i) => {
     const cell = ws.getCell(i + 1, 1);
@@ -1275,6 +1278,12 @@ async function gaReportToXlsx(report, exportedBy) {
     cell.font = { color: { argb: "FF000000" }, ...row.font };
     cell.fill = whiteFill;
     cell.alignment = { horizontal: "center", vertical: "middle" };
+    cell.border = {
+      top: {style:'mediumDashed'},
+      left: {style:'mediumDashed'},
+      bottom: {style:'mediumDashed'},
+      right: {style:'mediumDashed'}
+    };
     ws.getRow(i + 1).height = row.height;
   });
 
@@ -1360,6 +1369,27 @@ router.get("/analytics/export.csv", async (req, res) => {
       metrics: cfg.metrics.map((name) => ({ name })),
       limit: 10000,
     });
+
+        if (req.query.format === "json") {
+      const headers = [
+        ...report.dimensionHeaders.map((h) => h.name),
+        ...report.metricHeaders.map((h) => h.name),
+      ];
+      const rows = (report.rows || []).map((r) => [
+        ...r.dimensionValues.map((d, i) => {
+          const name = report.dimensionHeaders[i].name;
+          return name === "date"
+            ? `${d.value.slice(0, 4)}-${d.value.slice(4, 6)}-${d.value.slice(6, 8)}`
+            : d.value;
+        }),
+        ...r.metricValues.map((m) => Number(m.value)),
+      ]);
+      return res.json({
+        headers: headers.map((h) => GA_LABELS[h] || h),
+        rows,
+      });
+    }
+    
     if (req.query.format === "xlsx") {
       const u = req.session.user || {};
       const exportedBy =

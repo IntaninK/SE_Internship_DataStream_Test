@@ -61,6 +61,7 @@
       table-layout: fixed;
       width: 100%;
     }
+    .filter-select:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -93,7 +94,24 @@
       </button>
     </div>
 
-    <p id="reportMsg" style="font-size:13px; color:#6B7280;"></p>
+    <div>
+      <h2 style="font-family:Prompt,sans-serif; font-size:18px; font-weight:600; margin:16px 0;">รายงานจำนวนผู้ใช้</h2>
+      <button type="button" class="filter-select" data-range="1">เมื่อวาน</button>
+      <button type="button" class="filter-select" data-range="7">7 วันล่าสุด</button>
+      <button type="button" class="filter-select" data-range="30">30 วันล่าสุด</button>
+    </div>
+      
+    <p id="reportMsg" style="font-size:13px; color:#6B7280; margin-bottom: 12xp;"></p>
+
+    <div id="previewWrap" style="overflow-x:auto; background:#fff; border:1px solid #E5E7EB; border-radius:12px; display:none; margin-top: auto;">
+      <table class="data-table" id="previewTable" style="border-collapse:collapse; font-size:13px; min-width:640px;"></table>
+    </div>
+
+    <div id="pager" style="display:none; align-items:center; justify-content:center; gap:12px; margin:12px 0;">
+      <button type="button" id="prevPage" class="filter-select">‹ ก่อนหน้า</button>
+      <span id="pageInfo" style="font-size:13px; color:#6B7280;"></span>
+      <button type="button" id="nextPage" class="filter-select">ถัดไป ›</button>
+    </div>
   </main>
 
   <script src="../components/header_prof.js"></script>
