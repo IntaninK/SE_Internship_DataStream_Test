@@ -1,5 +1,5 @@
 (function () {
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 8;
 
   const typeEl = document.getElementById("reportType");
   const startEl = document.getElementById("startDate");
@@ -13,10 +13,13 @@
   const prevBtn = document.getElementById("prevPage");
   const nextBtn = document.getElementById("nextPage");
   const pageInfo = document.getElementById("pageInfo");
+  
 
   let headers = [];
   let allRows = [];
   let currentPage = 1;
+  let sortCol = null;   // which column is sorted (index 0, 1, 2...), null = not sorted
+  let sortDir = "asc";  // "asc" or "desc"
 
   // local date as YYYY-MM-DD (toISOString uses UTC and can be a day off in Thailand)
   const ymd = (d) =>
@@ -68,15 +71,34 @@
     }
   }
 
+  function getSortedRows() {
+    if (sortCol === null) return allRows;       // no sorting chosen: original order
+    const dir = sortDir === "asc" ? 1 : -1;     // flips the result for descending
+    return [...allRows].sort((a, b) => {
+      const x = a[sortCol];
+      const y = b[sortCol];
+      if (typeof x === "number" && typeof y === "number") return (x - y) * dir;
+      return String(x).localeCompare(String(y), "th") * dir;
+    });
+  }
   // draw only the current page of rows
-  function renderPage() {
-    const totalPages = Math.max(1, Math.ceil(allRows.length / PAGE_SIZE));
+    function renderPage() {
+    const rows = getSortedRows();                               // changed: sorted rows
+    const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
     currentPage = Math.min(Math.max(1, currentPage), totalPages);
-    const slice = allRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const slice = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+    const arrow = (i) =>
+      sortCol === i ? (sortDir === "asc" ? " ▲" : " ▼") : ' <span class="sort-hint">⇅</span>';
 
     previewTable.innerHTML =
       "<thead><tr>" +
-      headers.map((h) => `<th style="padding:8px 12px; text-align:left; background:#F8FAFC;">${esc(h)}</th>`).join("") +
+      headers
+        .map(
+          (h, i) =>
+          `<th class="sortable${sortCol === i ? " active" : ""}" data-col="${i}" title="คลิกเพื่อเรียงลำดับ">${esc(h)}${arrow(i)}</th>`
+        )
+        .join("") +
       "</tr></thead><tbody>" +
       slice
         .map(
@@ -141,6 +163,21 @@
 
   [typeEl, startEl, endEl].forEach((el) => el.addEventListener("change", loadPreview));
   btn.addEventListener("click", downloadReport);
+  
+  previewTable.addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-col]");   // did the click land on (or inside) a header cell?
+    if (!th) return;                               // no: ignore it
+
+    const col = Number(th.dataset.col);
+    if (sortCol === col) {
+      sortDir = sortDir === "asc" ? "desc" : "asc"; // same column again: flip the direction
+    } else {
+      sortCol = col;                                // new column: start ascending
+      sortDir = "asc";
+    }
+    currentPage = 1;                                // go back to page 1 after sorting
+    renderPage();
+  });
 
   loadPreview();
 })();
